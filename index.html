@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vishal Motors - Second Hand Cars</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Arial, sans-serif; background: black url('https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1600&q=80') no-repeat center center/cover; color: white; min-height: 100vh; }
+nav { display: flex; justify-content: flex-start; align-items: center; padding: 15px 30px; background: rgba(0,0,0,0.8); position: sticky; top: 0; }
+nav a { color: white; text-decoration: none; margin-right: 25px; font-size: 18px; display: flex; align-items: center; transition: color 0.3s; }
+nav a i { margin-right: 8px; }
+nav a:hover { color: gold; }
+
+section { padding: 60px 30px; background: rgba(0,0,0,0.6); margin: 20px; border-radius: 12px; }
+h1,h2 { color: gold; margin-bottom: 20px; }
+
+#cars-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; justify-content: center; }
+
+.car-card { background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 0 10px rgba(255,255,255,0.1); max-width: 300px; margin: auto; }
+
+.img-container { width: 100%; height: 180px; overflow: hidden; border-radius: 10px; background: #111; margin-bottom: 10px; }
+.img-container img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; display: block; }
+
+.car-card button { background: gold; border: none; padding: 10px 15px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+.car-card button:hover { background: orange; }
+
+form { display: flex; flex-direction: column; gap: 12px; max-width: 400px; }
+input, button { padding: 10px; border: none; border-radius: 8px; font-size: 16px; }
+input[type="tel"] { -moz-appearance: textfield; }
+button { background: gold; cursor: pointer; }
+button:hover { background: orange; }
+
+.contact-info { font-size: 18px; }
+
+#submitted-entries { margin-top: 20px; }
+.submitted-entry { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+
+.modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.9); }
+.modal-content { margin: 5% auto; padding: 20px; width: 90%; max-width: 800px; color: white; text-align: center; }
+.modal-content img { width: 100%; max-height: 400px; object-fit: cover; margin-bottom: 10px; border-radius: 10px; }
+.modal-close { color: white; font-size: 30px; float: right; cursor: pointer; }
+
+.modal-images { display: flex; gap: 10px; overflow-x: auto; margin-top: 10px; padding-bottom: 5px; }
+.modal-images img { width: 150px; height: 100px; object-fit: cover; cursor: pointer; border-radius: 8px; transition: transform 0.2s; }
+.modal-images img:hover { transform: scale(1.1); }
+</style>
+</head>
+<body>
+<nav>
+  <a href="#home"><i class="fa fa-home"></i> Home</a>
+  <a href="#cars"><i class="fa fa-car"></i> Cars</a>
+  <a href="#contact"><i class="fa fa-phone"></i> Contact</a>
+</nav>
+
+<section id="home">
+  <h1>Welcome to Vishal Motors</h1>
+  <p>Fill the form below to show your interest in a car.</p>
+  <form id="interestForm" action="/send-whatsapp" method="POST">
+    <input type="text" id="name" placeholder="Your Name" required>
+    <input type="tel" id="phone" placeholder="Contact Number" pattern="[0-9]{10}" required title="Please enter a 10-digit number">
+    <input type="email" id="email" placeholder="Your Email" required>
+    <input type="text" id="carInterest" placeholder="Car Interested In" required>
+    <button type="submit">Submit</button>
+  </form>
+  <div id="submitted-entries"></div>
+</section>
+
+<section id="cars">
+  <h2>Available Cars</h2>
+  <div id="cars-list"></div>
+</section>
+
+<section id="contact">
+  <h2>Contact Us</h2>
+  <p class="contact-info">Call us: +91 9822282275 <br>Email: vishal.shinde111@gmail.com</p>
+</section>
+
+<div id="carModal" class="modal">
+  <div class="modal-content">
+    <span class="modal-close">&times;</span>
+    <h3 id="modalCarName"></h3>
+    <p id="modalCarPrice"></p>
+    <img id="modalMainImage" src="" alt="">
+    <div id="modalImages" class="modal-images"></div>
+  </div>
+</div>
+
+<script type="module">
+// Firebase imports
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
+import { getFirestore, collection, getDocs, addDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyBNWR27R2VcUZ8emTTJlaJHQGQJZeEl_W4",
+  authDomain: "cars-bc92f.firebaseapp.com",
+  projectId: "cars-bc92f",
+  storageBucket: "cars-bc92f.firebasestorage.app",
+  messagingSenderId: "212301571472",
+  appId: "1:212301571472:web:a7460ac618167c0e747f15",
+  measurementId: "G-QR7BZC88GP"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const db = getFirestore(app);
+
+// Submit interest form to 'leads' collection
+const submittedContainer = document.getElementById("submitted-entries");
+
+async function loadSubmitted() {
+  submittedContainer.innerHTML = "";
+
+  const q = query(collection(db, "leads"), orderBy("createdAt", "asc"));
+  const snapshot = await getDocs(q);
+
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    const div = document.createElement("div");
+    div.className = "submitted-entry";
+    div.innerHTML = `<strong>${data.name}</strong> | ${data.phone} | ${data.email} | Interested in: ${data.carInterest}`;
+    submittedContainer.appendChild(div);
+  });
+}
+
+document.getElementById("interestForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    
+    const name = document.getElementById("name").value;
+    const phone = document.getElementById("phone").value;
+    const email = document.getElementById("email").value;
+    const carInterest = document.getElementById("carInterest").value;
+
+    if(!/^\d{10}$/.test(phone)) {
+        alert("Please enter a valid 10-digit contact number.");
+        return;
+    }
+
+    // Send WhatsApp message
+    try {
+        await fetch('/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, phone, email, carInterest })
+        });
+        alert("Your interest has been submitted and WhatsApp notification sent!");
+    } catch(err) {
+        alert("Error sending WhatsApp message: " + err.message);
+    }
+});
+
+// Initial load
+loadSubmitted();
+
+// Load cars from 'cars' collection
+async function loadCars() {
+  const carsContainer = document.getElementById("cars-list");
+  carsContainer.innerHTML = "";
+
+  const querySnapshot = await getDocs(collection(db, "cars"));
+  querySnapshot.forEach(doc => {
+    const car = doc.data();
+    const carCard = document.createElement("div");
+    carCard.className = "car-card";
+
+    const imgContainer = document.createElement("div");
+    imgContainer.className = "img-container";
+    const img = document.createElement("img");
+    img.src = (car.images && car.images.length > 0) ? car.images[0] : (car.image || "https://via.placeholder.com/400x300?text=No+Image");
+    img.alt = car.name;
+    imgContainer.appendChild(img);
+    carCard.appendChild(imgContainer);
+
+    const title = document.createElement("h3");
+    title.innerText = car.name;
+    carCard.appendChild(title);
+
+    const price = document.createElement("p");
+    price.innerText = `Price: ₹${car.price}`;
+    carCard.appendChild(price);
+
+    const btn = document.createElement("button");
+    btn.innerText = "Interested";
+    btn.addEventListener("click", () => {
+      document.getElementById("carInterest").value = car.name;
+      document.getElementById("interestForm").scrollIntoView({ behavior: "smooth" });
+    });
+    carCard.appendChild(btn);
+
+    // Modal
+    img.addEventListener("click", () => {
+      const modal = document.getElementById("carModal");
+      const mainImage = document.getElementById("modalMainImage");
+      const modalImages = document.getElementById("modalImages");
+
+      document.getElementById("modalCarName").innerText = car.name;
+      document.getElementById("modalCarPrice").innerText = `Price: ₹${car.price}`;
+
+      modalImages.innerHTML = "";
+      const images = (car.images && car.images.length > 0) ? car.images : (car.image ? [car.image] : ["https://via.placeholder.com/400x300?text=No+Image"]);
+      mainImage.src = images[0];
+
+      images.forEach((src, index) => {
+        const thumb = document.createElement("img");
+        thumb.src = src;
+        thumb.alt = car.name + " " + (index+1);
+        thumb.addEventListener("click", () => { mainImage.src = src; });
+        modalImages.appendChild(thumb);
+      });
+
+      modal.style.display = "block";
+    });
+
+    carsContainer.appendChild(carCard);
+  });
+}
+
+loadCars();
+
+// Modal close
+document.querySelector(".modal-close").addEventListener("click", () => {
+  document.getElementById("carModal").style.display = "none";
+});
+window.addEventListener("click", e => {
+  if(e.target.id === "carModal") document.getElementById("carModal").style.display = "none";
+});
+</script>
+</body>
+</html>  
